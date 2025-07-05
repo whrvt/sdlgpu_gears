@@ -38,7 +38,7 @@ SHADER_SOURCES = vertex.glsl fragment.glsl vertex.hlsl fragment.hlsl
 
 # Default target
 .PHONY: all
-all: shaders $(TARGET)
+all: $(TARGET)
 
 # Platform-specific builds
 .PHONY: linux windows
