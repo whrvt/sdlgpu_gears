@@ -1,11 +1,34 @@
+/*
+ * Copyright (C) 2025 William Horvath
+ */
+
 #pragma once
+#include <stdbool.h>
 
 typedef struct SDL_Window SDL_Window;
 
-typedef enum SDL_GPUPresentMode SDL_GPUPresentMode;
+typedef enum Renderer
+{
+	DEFAULT,
+	VULKAN,
+	D3D12
+} Renderer;
 
-bool init_gpu(SDL_Window *window);
+typedef enum PresentMode /* this matches the SDL_GPUPresentMode enum exactly */
+{
+	VSYNC,
+	IMMEDIATE,
+	MAILBOX
+} PresentMode;
+
+typedef struct InitParams
+{
+	SDL_Window *window;
+	PresentMode present_mode;
+	Renderer renderer;
+	unsigned int image_count;
+	bool verbose;
+} InitParams;
+
+bool init_gpu(InitParams *usercfg);
 void cleanup_gpu(void);
-
-/* 0 = vsync, 1 = immediate, 2 = mailbox */
-void set_swapchain_params(SDL_Window *window, SDL_GPUPresentMode *present_mode, unsigned int *image_count);

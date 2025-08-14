@@ -20,29 +20,27 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <SDL3/SDL.h>
-
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
+
+#include <SDL3/SDL_events.h>
+#include <SDL3/SDL_hints.h>
+#include <SDL3/SDL_init.h>
+#include <SDL3/SDL_video.h>
 
 #include "sdlgpu_init.h"
 #include "sdlgpu_render.h"
 
-/* globals */
-bool animate = true;
-RenderState render_state = {};
-
 /* event handler results */
-enum
+typedef enum Action
 {
 	NOP = 0,
 	EXIT = 1,
 	DRAW = 2
-};
+} Action;
 
-static int handle_event(SDL_Event *event)
+static Action handle_event(SDL_Event *event)
 {
 	switch (event->type)
 	{
@@ -66,7 +64,7 @@ static int handle_event(SDL_Event *event)
 		case SDLK_ESCAPE:
 			return EXIT;
 		case SDLK_A:
-			animate = !animate;
+			render_state.pause_animation = !render_state.pause_animation;
 			break;
 		default:
 			break;
@@ -94,9 +92,9 @@ static void event_loop(SDL_Window *window)
 	{
 		int op = NOP;
 
-		while (!animate || SDL_PollEvent(&event))
+		while (render_state.pause_animation || SDL_PollEvent(&event))
 		{
-			if (!animate)
+			if (render_state.pause_animation)
 				SDL_WaitEvent(&event);
 
 			op = handle_event(&event);
@@ -119,12 +117,16 @@ static void usage(void)
 	printf("  -geometry WxH+X+Y       window geometry\n");
 	printf("  -present_mode MODE      presentation mode: vsync, immediate, mailbox (default: mailbox)\n");
 	printf("  -image_count N          force the maximum number of frames queued on the gpu (default: 2, min: 1, max: 3)\n");
+#ifdef _WIN32
+	printf("  -vulkan                 use the Vulkan backend instead of D3D12\n");
+#define D3D_POSSIBLE 1
+#else
+#define D3D_POSSIBLE 0
+#endif
 }
 
 int main(int argc, char *argv[])
 {
-	SDL_Window *window = NULL;
-
 	int win_width = 300;
 	int win_height = 300;
 	int x = SDL_WINDOWPOS_CENTERED;
@@ -135,17 +137,21 @@ int main(int argc, char *argv[])
 
 	bool fullscreen = false;
 
-	SDL_GPUPresentMode present_mode = SDL_GPU_PRESENTMODE_MAILBOX; /* prefer mailbox, fallback to vsync */
-
-	unsigned int image_count = 2;
-
-	bool print_info = false;
+	InitParams cfg = {.window = NULL,
+	                  .present_mode = MAILBOX, /* prefer mailbox, fallback to vsync */
+	                  .renderer = DEFAULT,     /* d3d12 on Windows, Vulkan otherwise */
+	                  .image_count = 2,
+	                  .verbose = false};
 
 	for (int i = 1; i < argc; i++)
 	{
-		if (strcmp(argv[i], "-info") == 0)
+		if (D3D_POSSIBLE && strcmp(argv[i], "-vulkan") == 0)
 		{
-			print_info = true;
+			cfg.renderer = VULKAN;
+		}
+		else if (strcmp(argv[i], "-info") == 0)
+		{
+			cfg.verbose = true;
 		}
 		else if (i < argc - 1 && strcmp(argv[i], "-samples") == 0)
 		{
@@ -154,14 +160,14 @@ int main(int argc, char *argv[])
 		}
 		else if (i < argc - 1 && strcmp(argv[i], "-image_count") == 0)
 		{
-			image_count = (unsigned int)strtoul(argv[i + 1], NULL, 0);
-			if (image_count < 1)
+			cfg.image_count = (unsigned int)strtoul(argv[i + 1], NULL, 0);
+			if (cfg.image_count < 1)
 			{
-				image_count = 1;
+				cfg.image_count = 1;
 			}
-			else if (image_count > 3)
+			else if (cfg.image_count > 3)
 			{
-				image_count = 3;
+				cfg.image_count = 3;
 			}
 			++i;
 		}
@@ -174,15 +180,15 @@ int main(int argc, char *argv[])
 			char *mode = argv[i + 1];
 			if (strcmp(mode, "vsync") == 0)
 			{
-				present_mode = SDL_GPU_PRESENTMODE_VSYNC;
+				cfg.present_mode = VSYNC;
 			}
 			else if (strcmp(mode, "immediate") == 0)
 			{
-				present_mode = SDL_GPU_PRESENTMODE_IMMEDIATE;
+				cfg.present_mode = IMMEDIATE;
 			}
 			else if (strcmp(mode, "mailbox") == 0)
 			{
-				present_mode = SDL_GPU_PRESENTMODE_MAILBOX;
+				cfg.present_mode = MAILBOX;
 			}
 			else
 			{
@@ -228,6 +234,16 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	/* also respect SDL hint */
+	if (D3D_POSSIBLE && cfg.renderer != VULKAN)
+	{
+		const char *sdl_renderer_hint = SDL_GetHint(SDL_HINT_GPU_DRIVER);
+		if (sdl_renderer_hint && strcmp(sdl_renderer_hint, "vulkan") == 0)
+		{
+			cfg.renderer = VULKAN;
+		}
+	}
+
 	if (!SDL_Init(SDL_INIT_VIDEO))
 	{
 		printf("Error: couldn't initialize SDL: %s\n", SDL_GetError());
@@ -243,10 +259,10 @@ int main(int argc, char *argv[])
 	SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, fullscreen);
 	SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, false); /* set it as resizeable only after it's created */
 
-	window = SDL_CreateWindowWithProperties(props);
+	cfg.window = SDL_CreateWindowWithProperties(props);
 	SDL_DestroyProperties(props);
 
-	if (!window)
+	if (!cfg.window)
 	{
 		printf("Error: couldn't create window: %s\n", SDL_GetError());
 		SDL_Quit();
@@ -254,43 +270,21 @@ int main(int argc, char *argv[])
 	}
 
 	/* make sure the window state (size/position/fullscreen) has settled before doing anything else */
-	SDL_SyncWindow(window);
-	SDL_SetWindowResizable(window, true);
+	SDL_SyncWindow(cfg.window);
+	SDL_SetWindowResizable(cfg.window, true);
 
-	if (!init_gpu(window))
+	if (!init_gpu(&cfg))
 	{
-		SDL_DestroyWindow(window);
+		cleanup_gpu();
+		SDL_DestroyWindow(cfg.window);
 		SDL_Quit();
 		return -1;
 	}
 
-	set_swapchain_params(window, &present_mode, &image_count);
-
-	if (print_info)
-	{
-		printf("GPU driver: %s\n", SDL_GetGPUDeviceDriver(render_state.device));
-		printf("Shader formats: 0x%08X\n", SDL_GetGPUShaderFormats(render_state.device));
-		const char *present_mode_name = "UNKNOWN";
-		switch (present_mode)
-		{
-		case SDL_GPU_PRESENTMODE_VSYNC:
-			present_mode_name = "VSYNC";
-			break;
-		case SDL_GPU_PRESENTMODE_IMMEDIATE:
-			present_mode_name = "IMMEDIATE";
-			break;
-		case SDL_GPU_PRESENTMODE_MAILBOX:
-			present_mode_name = "MAILBOX";
-			break;
-		}
-		printf("Present mode: %s\n", present_mode_name);
-		printf("Image count: %d\n", image_count);
-	}
-
-	event_loop(window);
+	event_loop(cfg.window);
 
 	cleanup_gpu();
-	SDL_DestroyWindow(window);
+	SDL_DestroyWindow(cfg.window);
 	SDL_Quit();
 
 	return 0;

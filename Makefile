@@ -4,19 +4,19 @@
 # Project settings
 NAME = sdlgpu_gears
 TARGET = $(NAME)
-SOURCES = sdlgpu_gears.c sdlgpu_render.c sdlgpu_init.c
-HEADERS = sdlgpu_init.h sdlgpu_render.h sdlgpu_math.h
+SOURCES = main.c sdlgpu_render.c sdlgpu_init.c sdlgpu_gear_creation.c sdlgpu_shader_data.c
+HEADERS = sdlgpu_init.h sdlgpu_render.h sdlgpu_math.h sdlgpu_gear_creation.h sdlgpu_shader_data.h
 
 # Compiler settings
-CC = cc
-CFLAGS = -std=gnu23 -Wall -Wextra
+CC ?= cc
+CFLAGS = -Wall -Wextra
 LIBS = -lSDL3 -lm
 
 # Windows cross-compilation settings
-MINGW_PREFIX = x86_64-w64-mingw32
-MINGW_CC = $(MINGW_PREFIX)-gcc
-MINGW_PKG_CONFIG = $(MINGW_PREFIX)-pkg-config
-MINGW_CFLAGS = -static -std=gnu23 -Wall -Wextra
+MINGW_PREFIX ?= x86_64-w64-mingw32
+MINGW_CC ?= $(MINGW_PREFIX)-gcc
+MINGW_PKG_CONFIG ?= $(MINGW_PREFIX)-pkg-config
+MINGW_CFLAGS ?= -static -Wall -Wextra
 MINGW_LIBS = -lm
 
 # Build mode (debug/release)
@@ -31,6 +31,11 @@ else
     MINGW_CFLAGS += -O2 -DNDEBUG
 endif
 
+CFLAGS += $(EXTRACFLAGS)
+LIBS += $(EXTRALDFLAGS)
+MINGW_CFLAGS += $(EXTRACFLAGS)
+MINGW_LIBS += $(EXTRALDFLAGS)
+
 # Shader files
 VULKAN_SHADERS = vertex.spv fragment.spv
 DXIL_SHADERS = vertex.dxil fragment.dxil
@@ -43,14 +48,14 @@ all: $(TARGET)
 # Platform-specific builds
 .PHONY: linux windows
 linux: shaders-vulkan $(TARGET)
-windows: shaders-dxil $(TARGET).exe
+windows: shaders-vulkan shaders-dxil $(TARGET).exe
 
 # Native Linux build
 $(TARGET): $(SOURCES) $(HEADERS) $(VULKAN_SHADERS)
 	$(CC) $(CFLAGS) $(SOURCES) -o $@ $(LIBS)
 
 # Windows cross-compilation build
-$(TARGET).exe: $(SOURCES) $(HEADERS) $(DXIL_SHADERS)
+$(TARGET).exe: $(SOURCES) $(HEADERS) $(VULKAN_SHADERS) $(DXIL_SHADERS)
 	$(MINGW_CC) $(MINGW_CFLAGS) $$($(MINGW_PKG_CONFIG) --cflags --static sdl3) \
 		$(SOURCES) -o $@ \
 		$$($(MINGW_PKG_CONFIG) --libs --static sdl3) $(MINGW_LIBS)

@@ -1,7 +1,15 @@
+/*
+ * Copyright (C) 2025 William Horvath
+ */
+
 #pragma once
 
 #include <math.h>
 #include <string.h>
+
+#ifndef PI
+#define PI 3.14159265358979323846
+#endif
 
 static inline void matrix_identity(float *m)
 {
@@ -39,7 +47,7 @@ static inline void matrix_translate(float *m, float x, float y, float z)
 static inline void matrix_rotate_x(float *m, float angle)
 {
 	float rot[16];
-	float rad = (float)(angle * M_PI / 180.0);
+	float rad = (float)(angle * PI / 180.0);
 	float c = cosf(rad);
 	float s = sinf(rad);
 
@@ -54,7 +62,7 @@ static inline void matrix_rotate_x(float *m, float angle)
 static inline void matrix_rotate_y(float *m, float angle)
 {
 	float rot[16];
-	float rad = (float)(angle * M_PI / 180.0);
+	float rad = (float)(angle * PI / 180.0);
 	float c = cosf(rad);
 	float s = sinf(rad);
 
@@ -69,7 +77,7 @@ static inline void matrix_rotate_y(float *m, float angle)
 static inline void matrix_rotate_z(float *m, float angle)
 {
 	float rot[16];
-	float rad = (float)(angle * M_PI / 180.0);
+	float rad = (float)(angle * PI / 180.0);
 	float c = cosf(rad);
 	float s = sinf(rad);
 
