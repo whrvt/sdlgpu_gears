@@ -125,6 +125,8 @@ static void usage(void)
 #endif
 }
 
+#define WINDOW_TITLE "sdlgpu_gears"
+
 int main(int argc, char *argv[])
 {
 	int win_width = 300;
@@ -251,7 +253,7 @@ int main(int argc, char *argv[])
 	}
 
 	SDL_PropertiesID props = SDL_CreateProperties();
-	SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, "sdlgpu_gears");
+	SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, WINDOW_TITLE);
 	SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER, x);
 	SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_Y_NUMBER, y);
 	SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, win_width);
@@ -280,6 +282,9 @@ int main(int argc, char *argv[])
 		SDL_Quit();
 		return -1;
 	}
+
+	const char *title_with_renderer = (cfg.renderer == D3D12 ? WINDOW_TITLE " (Direct3D12)" : WINDOW_TITLE " (Vulkan)");
+	SDL_SetWindowTitle(cfg.window, title_with_renderer);
 
 	event_loop(cfg.window);
 

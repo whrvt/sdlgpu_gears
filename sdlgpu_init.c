@@ -13,7 +13,9 @@
 #include "sdlgpu_shader_data.h"
 
 #ifdef __cplusplus
-#define Z_INIT {}
+#define Z_INIT \
+	{ \
+	}
 #else
 #define Z_INIT {0}
 #endif
@@ -267,6 +269,9 @@ static int init_with_retry(InitParams *usercfg)
 		printf("Image count: %u\n", usercfg->image_count);
 	}
 
+	/* save successful renderer */
+	usercfg->renderer = actual_renderer;
+
 	return 1;
 }
 
@@ -351,13 +356,13 @@ static Renderer get_actual_renderer(Renderer choice, bool print_driver_enumerati
 			d3d12_seen = true;
 	}
 
+	if (print_driver_enumeration)
+		printf(".\n");
+
 	if (!d3d12_seen && !vulkan_seen) /* error */
 		return DEFAULT;
 
 	ret_saved = (vulkan_seen && (choice == VULKAN || !d3d12_seen)) ? VULKAN : D3D12;
-
-	if (print_driver_enumeration)
-		printf(".\nUsing: %s\n", ret_saved == VULKAN ? "vulkan" : "direct3d12");
 
 	return ret_saved;
 }

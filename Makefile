@@ -1,5 +1,4 @@
 # SDL_gpu gears demo Makefile
-# thanks Claude Sonnet 4.0!
 
 # Project settings
 NAME = sdlgpu_gears
