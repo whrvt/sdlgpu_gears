@@ -492,7 +492,7 @@ int main(int argc, char *argv[])
 	SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, winHeight);
 
 	SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, fullscreen);
-	SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
+	SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, false);
 
 	SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true);
 
@@ -508,6 +508,10 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+	/* make sure the window state (size/position/fullscreen) has settled before doing anything else */
+	SDL_SyncWindow(window);
+	SDL_SetWindowResizable(window, true);
+
 	if (fullscreen)
 	{
 		const SDL_DisplayMode *mode = NULL;
@@ -522,6 +526,14 @@ int main(int argc, char *argv[])
 	if (!context)
 	{
 		printf("Error: couldn't create OpenGL context: %s\n", SDL_GetError());
+		SDL_DestroyWindow(window);
+		SDL_Quit();
+		return -1;
+	}
+
+	if (!SDL_GL_MakeCurrent(window, context)) {
+		printf("Error: couldn't make OpenGL context current: %s\n", SDL_GetError());
+		SDL_GL_DestroyContext(context);
 		SDL_DestroyWindow(window);
 		SDL_Quit();
 		return -1;

@@ -16,14 +16,22 @@
 #endif
 
 #ifdef _WIN32
+
+#ifdef _WIN64
+#define INCBIN_PREFIX ""
+#else
+#define INCBIN_PREFIX "_"
+#endif
+
 #define INCBIN_(file, sym) \
-	__asm__(".section .rdata\n" \
+	__asm__(".section .rdata,\"dr\"\n" \
 	        ".balign 1\n" \
-	        ".globl " #sym "\n" #sym ":\n" \
+	        ".globl " INCBIN_PREFIX #sym "\n" INCBIN_PREFIX #sym ":\n" \
 	        ".incbin \"" file "\"\n" \
-	        ".globl " #sym "_end\n" #sym "_end:\n" \
+	        ".globl " INCBIN_PREFIX #sym "_end\n" INCBIN_PREFIX #sym "_end:\n" \
 	        ".balign 1\n" \
-	        ".section .text\n")
+	        ".section .text\n");
+
 #else
 #define INCBIN_(file, sym) \
 	__asm__(".section .rodata\n" \
