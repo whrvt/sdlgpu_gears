@@ -148,3 +148,56 @@ unsigned long long fsh_dx_size(void)
 	return 0;
 }
 #endif /* _WIN32 */
+
+/* MSL source for Metal, Apple-only */
+#if defined(__APPLE__) && defined(__MACH__)
+#ifdef HAVE_EMBED
+const unsigned char vsh_msl[] = {
+#embed "vertex.metal"
+};
+const unsigned char fsh_msl[] = {
+#embed "fragment.metal"
+};
+unsigned long long vsh_msl_size(void)
+{
+	return sizeof(vsh_msl);
+}
+unsigned long long fsh_msl_size(void)
+{
+	return sizeof(fsh_msl);
+}
+#else
+INCBIN_("vertex.metal", vsh_msl);
+INCBIN_("fragment.metal", fsh_msl);
+/* clang-format off */
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern const unsigned char vsh_msl_end[];
+extern const unsigned char fsh_msl_end[];
+#ifdef __cplusplus
+}
+#endif
+/* clang-format on */
+unsigned long long vsh_msl_size(void)
+{
+	return &vsh_msl_end[0] - &vsh_msl[0];
+}
+unsigned long long fsh_msl_size(void)
+{
+	return &fsh_msl_end[0] - &fsh_msl[0];
+}
+#endif /* HAVE_EMBED */
+#else
+/* dummy defines for platforms without Metal support */
+const unsigned char vsh_msl[] = {(unsigned char)0};
+const unsigned char fsh_msl[] = {(unsigned char)0};
+unsigned long long vsh_msl_size(void)
+{
+	return 0;
+}
+unsigned long long fsh_msl_size(void)
+{
+	return 0;
+}
+#endif /* __APPLE__ && __MACH__ */

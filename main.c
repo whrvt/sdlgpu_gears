@@ -117,11 +117,15 @@ static void usage(void)
 	printf("  -geometry WxH+X+Y       window geometry\n");
 	printf("  -present_mode MODE      presentation mode: vsync, immediate, mailbox (default: mailbox)\n");
 	printf("  -image_count N          force the maximum number of frames queued on the gpu (default: 2, min: 1, max: 3)\n");
-#ifdef _WIN32
+#if defined(_WIN32)
 	printf("  -vulkan                 use the Vulkan backend instead of D3D12\n");
-#define D3D_POSSIBLE 1
+#elif defined(__APPLE__) && defined(__MACH__)
+	printf("  -vulkan                 use the Vulkan backend (via MoltenVK) instead of Metal\n");
+#endif
+#if defined(_WIN32) || (defined(__APPLE__) && defined(__MACH__))
+#define VULKAN_TOGGLE_POSSIBLE 1
 #else
-#define D3D_POSSIBLE 0
+#define VULKAN_TOGGLE_POSSIBLE 0
 #endif
 }
 
@@ -141,13 +145,13 @@ int main(int argc, char *argv[])
 
 	InitParams cfg = {.window = NULL,
 	                  .present_mode = MAILBOX, /* prefer mailbox, fallback to vsync */
-	                  .renderer = DEFAULT,     /* d3d12 on Windows, Vulkan otherwise */
+	                  .renderer = DEFAULT,     /* Metal on Apple, D3D12 on Windows, Vulkan otherwise */
 	                  .image_count = 2,
 	                  .verbose = false};
 
 	for (int i = 1; i < argc; i++)
 	{
-		if (D3D_POSSIBLE && strcmp(argv[i], "-vulkan") == 0)
+		if (VULKAN_TOGGLE_POSSIBLE && strcmp(argv[i], "-vulkan") == 0)
 		{
 			cfg.renderer = VULKAN;
 		}
@@ -237,7 +241,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* also respect SDL hint */
-	if (D3D_POSSIBLE && cfg.renderer != VULKAN)
+	if (VULKAN_TOGGLE_POSSIBLE && cfg.renderer != VULKAN)
 	{
 		const char *sdl_renderer_hint = SDL_GetHint(SDL_HINT_GPU_DRIVER);
 		if (sdl_renderer_hint && strcmp(sdl_renderer_hint, "vulkan") == 0)
@@ -284,9 +288,14 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	const char *title_with_renderer = (cfg.renderer == D3D12 ? WINDOW_TITLE " (Direct3D12)" : WINDOW_TITLE " (Vulkan)");
+	const char *title_with_renderer = WINDOW_TITLE " (Vulkan)";
+	if (cfg.renderer == D3D12)
+		title_with_renderer = WINDOW_TITLE " (Direct3D12)";
+	else if (cfg.renderer == METAL)
+		title_with_renderer = WINDOW_TITLE " (Metal)";
 	SDL_SetWindowTitle(cfg.window, title_with_renderer);
 
+	/* main loop starts here */
 	event_loop(cfg.window);
 
 	cleanup_gpu();

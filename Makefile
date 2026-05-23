@@ -39,23 +39,64 @@ LIBS += $(EXTRALDFLAGS)
 MINGW_CFLAGS += $(EXTRACFLAGS)
 MINGW_LIBS += $(EXTRALDFLAGS)
 
+# Detect host OS so the default target Does The Right Thing.
+UNAME_S := $(shell uname -s)
+
 # Shader files
 VULKAN_SHADERS = vertex.spv fragment.spv
 DXIL_SHADERS = vertex.dxil fragment.dxil
-SHADER_SOURCES = vertex.glsl fragment.glsl vertex.hlsl fragment.hlsl
+METAL_SHADERS = vertex.metal fragment.metal
+SHADER_SOURCES = vertex.glsl fragment.glsl vertex.hlsl fragment.hlsl $(METAL_SHADERS)
+
+# On Apple, the .metal source is embedded into the executable so the binary
+# depends on it. Elsewhere it's a no-op.
+ifeq ($(UNAME_S),Darwin)
+NATIVE_SHADER_DEPS = $(VULKAN_SHADERS) $(METAL_SHADERS)
+# Build into a proper .app bundle so macOS picks up the Info.plist (and
+# Game Mode kicks in for fullscreen). The binary inside the bundle is
+# always named $(NAME) to match CFBundleExecutable; the bundle directory
+# carries the -debug suffix when MODE=debug. $(TARGET) at the project
+# root is a convenience symlink pointing into the bundle.
+APP_BUNDLE  := $(TARGET).app
+APP_EXE     := $(APP_BUNDLE)/Contents/MacOS/$(NAME)
+APP_INFO    := $(APP_BUNDLE)/Contents/Info.plist
+APP_PKGINFO := $(APP_BUNDLE)/Contents/PkgInfo
+else
+NATIVE_SHADER_DEPS = $(VULKAN_SHADERS)
+endif
 
 # Default target
 .PHONY: all
 all: $(TARGET)
 
 # Platform-specific builds
-.PHONY: linux windows
-linux: shaders-vulkan $(TARGET)
+.PHONY: native linux macos windows
+native: shaders-vulkan $(TARGET)
+linux: native
+macos: native
 windows: shaders-vulkan shaders-dxil $(TARGET).exe
 
-# Native Linux build
-$(TARGET): $(SOURCES) $(HEADERS) $(VULKAN_SHADERS)
+ifeq ($(UNAME_S),Darwin)
+# Native build (macOS): produce $(APP_BUNDLE) and a top-level symlink.
+$(TARGET): $(APP_EXE) $(APP_INFO) $(APP_PKGINFO)
+	@ln -sfn $(APP_EXE) $@
+
+$(APP_EXE): $(SOURCES) $(HEADERS) $(NATIVE_SHADER_DEPS)
+	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(SOURCES) -o $@ $(LIBS)
+
+$(APP_INFO): Info.plist
+	@mkdir -p $(@D)
+	@cp $< $@
+
+$(APP_PKGINFO):
+	@mkdir -p $(@D)
+	@printf 'APPL????' > $@
+else
+# Native build (Linux)
+$(TARGET): $(SOURCES) $(HEADERS) $(NATIVE_SHADER_DEPS)
+	$(CC) $(CFLAGS) $(SOURCES) -o $@ $(LIBS)
+endif
 
 # Windows cross-compilation build
 $(TARGET).exe: $(SOURCES) $(HEADERS) $(VULKAN_SHADERS) $(DXIL_SHADERS)
@@ -122,7 +163,9 @@ info:
 	@echo "SDL_gpu gears demo build system"
 	@echo "Available targets:"
 	@echo "  all        - Build native binary with all shaders"
-	@echo "  linux      - Build for Linux (native)"
+	@echo "  native     - Build for the host platform (Linux or macOS)"
+	@echo "  linux      - Alias for native"
+	@echo "  macos      - Alias for native"
 	@echo "  windows    - Cross-compile for Windows"
 	@echo "  debug      - Build with debug symbols"
 	@echo "  shaders    - Compile all shaders"
@@ -136,6 +179,7 @@ info:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make                    # Build for current platform"
+	@echo "  make macos              # Build native macOS binary (Metal default)"
 	@echo "  make windows            # Cross-compile for Windows"
 	@echo "  make MODE=debug run     # Debug build and run"
 
@@ -152,7 +196,10 @@ shader-info: $(VULKAN_SHADERS) $(DXIL_SHADERS)
 # Clean up build artifacts
 .PHONY: clean clean-shaders clean-all
 clean:
-	rm -f $(TARGET) $(TARGET)-debug $(TARGET).exe $(TARGET)-debug.exe
+	rm -f $(NAME) $(NAME)-debug $(NAME).exe $(NAME)-debug.exe
+ifeq ($(UNAME_S),Darwin)
+	rm -rf $(NAME).app $(NAME)-debug.app
+endif
 
 clean-shaders:
 	rm -f $(VULKAN_SHADERS) $(DXIL_SHADERS)

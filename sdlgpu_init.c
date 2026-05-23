@@ -94,6 +94,8 @@ static int init_with_retry(InitParams *usercfg)
 	const unsigned char *fsh = NULL;
 	unsigned long long fsh_size = 0;
 
+	const char *shader_entrypoint = "main";
+
 	if (actual_renderer == VULKAN)
 	{
 		SDL_SetStringProperty(props, SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING, "vulkan");
@@ -104,6 +106,18 @@ static int init_with_retry(InitParams *usercfg)
 		vsh_size = vsh_spv_size();
 		fsh = fsh_spv;
 		fsh_size = fsh_spv_size();
+	}
+	else if (actual_renderer == METAL)
+	{
+		SDL_SetStringProperty(props, SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING, "metal");
+		SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_MSL_BOOLEAN, true);
+
+		shader_format = SDL_GPU_SHADERFORMAT_MSL;
+		vsh = vsh_msl;
+		vsh_size = vsh_msl_size();
+		fsh = fsh_msl;
+		fsh_size = fsh_msl_size();
+		shader_entrypoint = "main0"; /* `main` is reserved in MSL */
 	}
 	else
 	{
@@ -138,7 +152,7 @@ static int init_with_retry(InitParams *usercfg)
 	/* create shaders */
 	SDL_GPUShaderCreateInfo vertex_shader_info = {.code_size = vsh_size,
 	                                              .code = vsh,
-	                                              .entrypoint = "main",
+	                                              .entrypoint = shader_entrypoint,
 	                                              .format = shader_format,
 	                                              .stage = SDL_GPU_SHADERSTAGE_VERTEX,
 	                                              .num_samplers = 0,
@@ -149,7 +163,7 @@ static int init_with_retry(InitParams *usercfg)
 
 	SDL_GPUShaderCreateInfo fragment_shader_info = {.code_size = fsh_size,
 	                                                .code = fsh,
-	                                                .entrypoint = "main",
+	                                                .entrypoint = shader_entrypoint,
 	                                                .format = shader_format,
 	                                                .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
 	                                                .num_samplers = 0,
@@ -313,6 +327,25 @@ static void set_swapchain_params(SDL_Window *window, enum PresentMode *present_m
 
 static Renderer get_actual_renderer(Renderer choice, bool print_driver_enumeration)
 {
+	/* Listed in this platform's preferred order. The first available entry is the default. */
+	static struct
+	{
+		Renderer renderer;
+		const char *sdl_name;
+		bool seen;
+	} backends[] = {
+#if defined(__APPLE__) && defined(__MACH__)
+	    {METAL, "metal", false},
+	    {VULKAN, "vulkan", false},
+#elif defined(_WIN32)
+	    {D3D12, "direct3d12", false},
+	    {VULKAN, "vulkan", false},
+#else
+	    {VULKAN, "vulkan", false},
+#endif
+	};
+	const int num_backends = (int)(sizeof(backends) / sizeof(backends[0]));
+
 	static bool printed = false;
 	if (print_driver_enumeration)
 	{
@@ -322,47 +355,79 @@ static Renderer get_actual_renderer(Renderer choice, bool print_driver_enumerati
 			printed = true;
 	}
 
-	static bool vulkan_seen = false;
-	static bool d3d12_seen = false;
-	static Renderer ret_saved = DEFAULT;
+	static int selected_idx = -1;
 
-	/* fallback logic (Windows can use either D3D12 or Vulkan) */
-	if (ret_saved != DEFAULT)
+	/* fallback: rotate through remaining seen backends in the platform's priority order */
+	if (selected_idx >= 0)
 	{
-		if ((ret_saved == VULKAN) && d3d12_seen)
-			return D3D12;
-		else if ((ret_saved == D3D12) && vulkan_seen)
-			return VULKAN;
-		else /* error */
-			return DEFAULT;
+		for (int step = 1; step < num_backends; step++)
+		{
+			int i = (selected_idx + step) % num_backends;
+			if (backends[i].seen)
+			{
+				selected_idx = i;
+				return backends[i].renderer;
+			}
+		}
+		return DEFAULT; /* exhausted */
 	}
 
 	int num_avail = SDL_GetNumGPUDrivers();
 	if (num_avail <= 0)
-		return DEFAULT; /* error */
+		return DEFAULT;
 
 	if (print_driver_enumeration)
 		printf("Found %d SDL_gpu driver backend%s:", num_avail, num_avail > 1 ? "s" : "");
 
+	bool any_seen = false;
 	for (int i = 0; i < num_avail; i++)
 	{
 		const char *driver = SDL_GetGPUDriver(i);
 		if (print_driver_enumeration)
 			printf(" %s", driver);
 
-		if (strcmp(driver, "vulkan") == 0)
-			vulkan_seen = true;
-		else if (strcmp(driver, "direct3d12") == 0)
-			d3d12_seen = true;
+		for (int b = 0; b < num_backends; b++)
+		{
+			if (strcmp(driver, backends[b].sdl_name) == 0)
+			{
+				backends[b].seen = true;
+				any_seen = true;
+				break;
+			}
+		}
 	}
 
 	if (print_driver_enumeration)
 		printf(".\n");
 
-	if (!d3d12_seen && !vulkan_seen) /* error */
+	if (!any_seen)
 		return DEFAULT;
 
-	ret_saved = (vulkan_seen && (choice == VULKAN || !d3d12_seen)) ? VULKAN : D3D12;
+	/* prefer the user's explicit choice when available, else the first seen in priority order */
+	int pick = -1;
+	for (int i = 0; i < num_backends; i++)
+	{
+		if (backends[i].seen && backends[i].renderer == choice)
+		{
+			pick = i;
+			break;
+		}
+	}
+	if (pick < 0)
+	{
+		for (int i = 0; i < num_backends; i++)
+		{
+			if (backends[i].seen)
+			{
+				pick = i;
+				break;
+			}
+		}
+	}
 
-	return ret_saved;
+	if (pick < 0)
+		return DEFAULT;
+
+	selected_idx = pick;
+	return backends[pick].renderer;
 }

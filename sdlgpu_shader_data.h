@@ -21,6 +21,12 @@ extern const unsigned char fsh_dx[];
 unsigned long long vsh_dx_size(void);
 unsigned long long fsh_dx_size(void);
 
+/* Apple builds can use either Metal (default) or Vulkan via MoltenVK */
+extern const unsigned char vsh_msl[];
+extern const unsigned char fsh_msl[];
+unsigned long long vsh_msl_size(void);
+unsigned long long fsh_msl_size(void);
+
 #ifdef __cplusplus
 }
 #endif

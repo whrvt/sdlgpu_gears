@@ -11,7 +11,8 @@ typedef enum Renderer
 {
 	DEFAULT,
 	VULKAN,
-	D3D12
+	D3D12,
+	METAL
 } Renderer;
 
 typedef enum PresentMode /* this matches the SDL_GPUPresentMode enum exactly */
