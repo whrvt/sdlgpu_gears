@@ -32,7 +32,18 @@
 	        ".balign 1\n" \
 	        ".section .text\n");
 
-#else
+#elif defined(__APPLE__) && defined(__MACH__) /* Mach-O */
+#define INCBIN_(file, sym) \
+	__asm__(".section __DATA,__const\n" \
+	        ".balign 1\n" \
+	        ".globl _" #sym "\n" \
+	        "_" #sym ":\n" \
+	        ".incbin \"" file "\"\n" \
+	        ".globl _" #sym "_end\n" \
+	        "_" #sym "_end:\n" \
+	        ".balign 1\n" \
+	        ".section __TEXT,__text\n")
+#else /* ELF */
 #define INCBIN_(file, sym) \
 	__asm__(".section .rodata\n" \
 	        ".balign 1\n" \

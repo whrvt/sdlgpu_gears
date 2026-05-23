@@ -12,7 +12,7 @@
 #include "sdlgpu_render.h"
 #include "sdlgpu_shader_data.h"
 
-#ifdef __cplusplus
+#if defined(__cplusplus) || (defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 202311L))
 #define Z_INIT \
 	{ \
 	}

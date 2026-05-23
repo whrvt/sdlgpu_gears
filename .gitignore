@@ -52,3 +52,5 @@ debug_gpu
 
 compile_commands.json
 *-debug
+
+*.dSYM/

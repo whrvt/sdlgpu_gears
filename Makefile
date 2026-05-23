@@ -6,10 +6,14 @@ TARGET = $(NAME)
 SOURCES = main.c sdlgpu_render.c sdlgpu_init.c sdlgpu_gear_creation.c sdlgpu_shader_data.c
 HEADERS = sdlgpu_init.h sdlgpu_render.h sdlgpu_math.h sdlgpu_gear_creation.h sdlgpu_shader_data.h
 
+PKG_CONFIG ?= pkg-config
+SDL3_CFLAGS ?= $(shell $(PKG_CONFIG) --cflags sdl3)
+SDL3_LIBS ?= $(shell $(PKG_CONFIG) --libs sdl3)
+
 # Compiler settings
 CC ?= cc
-CFLAGS = -Wall -Wextra
-LIBS = -lSDL3 -lm
+CFLAGS = -Wall -Wextra $(SDL3_CFLAGS) -g
+LIBS = -lm $(SDL3_LIBS) -g
 
 # Windows cross-compilation settings
 MINGW_PREFIX ?= x86_64-w64-mingw32
@@ -22,8 +26,8 @@ MINGW_LIBS = -lm
 MODE ?= release
 
 ifeq ($(MODE),debug)
-    CFLAGS += -g -O0 -D_DEBUG
-    MINGW_CFLAGS += -g -O0 -D_DEBUG
+    CFLAGS += -O0 -D_DEBUG
+    MINGW_CFLAGS += -O0 -D_DEBUG
     TARGET = $(NAME)-debug
 else
     CFLAGS += -O2 -DNDEBUG

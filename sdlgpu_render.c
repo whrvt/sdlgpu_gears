@@ -11,8 +11,10 @@
 #include "sdlgpu_math.h"
 #include "sdlgpu_render.h"
 
-#ifdef __cplusplus
-#define Z_INIT {}
+#if defined(__cplusplus) || (defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 202311L))
+#define Z_INIT \
+	{ \
+	}
 #else
 #define Z_INIT {0}
 #endif
